@@ -72,7 +72,7 @@ class TestIntegrationGithubOrgClient(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up class by mocking requests.get with fixture payloads."""
+        """Set up class with mocked requests.get for fixture payloads."""
         cls.get_patcher = patch('requests.get')
         cls.mock_get = cls.get_patcher.start()
         cls.mock_get.side_effect = [
@@ -91,7 +91,7 @@ class TestIntegrationGithubOrgClient(unittest.TestCase):
         self.assertEqual(client.public_repos(), self.expected_repos)
 
     def test_public_repos_with_license(self):
-        """Test public_repos with license filter returns expected repos."""
+        """Test public_repos with apache-2.0 license filter."""
         client = GithubOrgClient("google")
         self.assertEqual(client.public_repos(license="apache-2.0"),
                          self.apache2_repos)
