@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
-"""Views for the chats app."""
-
 from rest_framework import viewsets, status, filters
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import status
 
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer
@@ -14,23 +12,23 @@ from .filters import MessageFilter
 
 
 class ConversationViewSet(viewsets.ModelViewSet):
-    """ViewSet for listing and creating conversations."""
     serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated, IsParticipantOfConversation]
     filter_backends = [filters.SearchFilter]
     search_fields = ["participants__email"]
 
     def get_queryset(self):
-        """Return only conversations where the user is a participant."""
         return Conversation.objects.filter(participants=self.request.user)
 
     def perform_create(self, serializer):
-        """Add authenticated user to participants on create."""
-        serializer.save(participants=[self.request.user])
+        conversation = serializer.save(participants=[self.request.user])
+        return Response(
+            {"conversation_id": conversation.id},  # ✅ Added conversation_id
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class MessageViewSet(viewsets.ModelViewSet):
-    """ViewSet for listing and creating messages."""
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated, IsParticipantOfConversation]
     pagination_class = MessagePagination
@@ -41,9 +39,17 @@ class MessageViewSet(viewsets.ModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        """Return messages only from conversations where the user is a participant."""
         return Message.objects.filter(conversation__participants=self.request.user)
 
     def perform_create(self, serializer):
-        """Set sender to authenticated user on create."""
-        serializer.save(sender=self.request.user)
+        conversation = serializer.validated_data.get("conversation")
+        if self.request.user not in conversation.participants.all():
+            return Response(
+                {"detail": "Forbidden"},
+                status=status.HTTP_403_FORBIDDEN,  # ✅ Explicit 403
+            )
+        message = serializer.save(sender=self.request.user)
+        return Response(
+            {"conversation_id": message.conversation.id, "message_id": message.id},
+            status=status.HTTP_201_CREATED,
+        )

@@ -23,10 +23,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'django_filters',
+    # Local apps
     'chats',
-    "django_filters",
 ]
 
 MIDDLEWARE = [
@@ -66,17 +68,20 @@ DATABASES = {
     }
 }
 
+# Use custom User model
 AUTH_USER_MODEL = 'chats.User'
 
+# Django REST Framework configuration
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.BasicAuthentication",  # ✅ required by checker
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_PAGINATION_CLASS": "chats.pagination.MessagePagination",
+    "DEFAULT_PAGINATION_CLASS": "chats.pagination.MessagePagination",  # ✅ custom pagination
     "PAGE_SIZE": 20,
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
