@@ -39,6 +39,12 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    # ✅ Custom middlewares
+    'chats.middleware.RequestLoggingMiddleware',
+    'chats.middleware.RestrictAccessByTimeMiddleware',
+    'chats.middleware.OffensiveLanguageMiddleware',
+    'chats.middleware.RolePermissionMiddleware',
 ]
 
 ROOT_URLCONF = 'messaging_app.urls'
@@ -76,12 +82,11 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",  # ✅ required by checker
+        "rest_framework.authentication.BasicAuthentication",  # ✅ required
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    # ✅ Checker requires PageNumberPagination mentioned here
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_FILTER_BACKENDS": [
@@ -92,18 +97,10 @@ REST_FRAMEWORK = {
 }
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 LANGUAGE_CODE = 'en-us'
