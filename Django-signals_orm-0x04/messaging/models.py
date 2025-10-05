@@ -25,7 +25,7 @@ class Message(models.Model):
     message_body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # ✅ Edit tracking fields
+    # ✅ Edit tracking
     edited_at = models.DateTimeField(null=True, blank=True)
     edited_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -33,6 +33,15 @@ class Message(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="edited_messages",
+    )
+
+    # ✅ Threaded conversations: self-referential FK
+    parent_message = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        related_name="replies",
+        on_delete=models.CASCADE,
     )
 
     def mark_as_edited(self, user):

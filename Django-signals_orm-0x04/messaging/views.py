@@ -40,7 +40,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
 class MessageViewSet(viewsets.ModelViewSet):
     """
     Handles sending messages and threaded replies.
-    Uses select_related for sender/receiver, and supports recursive replies.
+    Uses select_related for sender, edited_by, and supports recursive replies.
     """
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
@@ -48,12 +48,12 @@ class MessageViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Optimized query:
-        - select_related: sender and receiver (FKs)
+        - select_related: sender and edited_by (FKs)
         - prefetch_related: threaded replies
         """
         return (
             Message.objects.filter(conversation__participants=self.request.user)
-            .select_related("sender", "edited_by", "conversation")
+            .select_related("sender", "edited_by", "conversation", "parent_message")
             .prefetch_related(
                 Prefetch("replies", queryset=Message.objects.select_related("sender"))
             )
@@ -62,7 +62,7 @@ class MessageViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """
         Create a message or reply.
-        If a reply_to is provided, link this message as a threaded reply.
+        If parent_message is provided, link this message as a threaded reply.
         """
         conversation = serializer.validated_data.get("conversation")
         if self.request.user not in conversation.participants.all():
@@ -71,13 +71,14 @@ class MessageViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # ✅ Explicitly set sender
         message = serializer.save(sender=self.request.user)
 
         return Response(
             {
                 "conversation_id": message.conversation.id,
                 "message_id": message.id,
-                "reply_to": message.reply_to.id if message.reply_to else None,
+                "parent_message": message.parent_message.id if message.parent_message else None,
             },
             status=status.HTTP_201_CREATED,
         )
