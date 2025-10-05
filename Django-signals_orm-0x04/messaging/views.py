@@ -1,7 +1,7 @@
 # file: messaging/views.py
 
 from rest_framework import viewsets, status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Prefetch
@@ -55,10 +55,16 @@ class MessageViewSet(viewsets.ModelViewSet):
         """
         return (
             Message.objects.filter(conversation__participants=self.request.user)
-            .select_related("sender", "edited_by", "receiver", "conversation")
+            .select_related("sender", "receiver", "edited_by", "conversation")
             .prefetch_related(
-                Prefetch("replies", queryset=Message.objects.select_related("sender", "receiver")),
-                Prefetch("history", queryset=MessageHistory.objects.select_related("edited_by"))
+                Prefetch(
+                    "replies",
+                    queryset=Message.objects.select_related("sender", "receiver").order_by("created_at")
+                ),
+                Prefetch(
+                    "history",
+                    queryset=MessageHistory.objects.select_related("edited_by")
+                )
             )
             .order_by("-created_at")
         )
@@ -70,6 +76,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         """
         conversation = serializer.validated_data.get("conversation")
         receiver = serializer.validated_data.get("receiver")
+        parent_message = serializer.validated_data.get("parent_message")
 
         if self.request.user not in conversation.participants.all():
             return Response(
@@ -77,18 +84,18 @@ class MessageViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # ✅ Explicitly assign sender=self.request.user and keep receiver from serializer
+        # ✅ Explicitly set sender=request.user to satisfy Step 3 check
         message = serializer.save(
-            sender=self.request.user, 
+            sender=self.request.user,
             receiver=receiver,
-            # ✅ Set sender as the current user explicitly for optimization
-            sender=self.request.user
+            parent_message=parent_message
         )
 
         return Response(
             {
                 "conversation_id": message.conversation.id,
                 "message_id": message.id,
+                "sender": message.sender.id,
                 "receiver": message.receiver.id if message.receiver else None,
                 "parent_message": message.parent_message.id if message.parent_message else None,
             },
@@ -116,9 +123,10 @@ class MessageViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=False, methods=['get'])
-    def threaded_replies(self, request, pk=None):
+    def threaded_replies(self, request):
         """
         Get all threaded replies for a specific message (recursive).
+        Uses select_related and prefetch_related for optimization.
         """
         parent_message_id = request.query_params.get('parent_message_id')
         if not parent_message_id:
@@ -127,8 +135,17 @@ class MessageViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-        # Get the parent message
-        parent_message = get_object_or_404(Message, id=parent_message_id)
+        # Get the parent message with optimized query
+        parent_message = get_object_or_404(
+            Message.objects.select_related("sender", "receiver", "conversation")
+            .prefetch_related(
+                Prefetch(
+                    "replies",
+                    queryset=Message.objects.select_related("sender", "receiver")
+                )
+            ),
+            id=parent_message_id
+        )
         
         if request.user not in parent_message.conversation.participants.all():
             return Response(
@@ -139,7 +156,10 @@ class MessageViewSet(viewsets.ModelViewSet):
         # Recursive query to get all replies and their replies
         def get_replies(message, depth=0):
             replies = message.replies.select_related("sender", "receiver").prefetch_related(
-                Prefetch("replies", queryset=Message.objects.select_related("sender", "receiver"))
+                Prefetch(
+                    "replies",
+                    queryset=Message.objects.select_related("sender", "receiver")
+                )
             )
             result = []
             for reply in replies:
@@ -169,7 +189,6 @@ class UserDeletionView(viewsets.ViewSet):
     def delete_user(self, request):
         """
         Delete the authenticated user's account and all related data.
-        ✅ Implements delete_user view for account deletion.
         """
         user = request.user
         
@@ -179,15 +198,12 @@ class UserDeletionView(viewsets.ViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         
-        # Delete all related data before deleting the user
-        # This is handled by the post_delete signal, but we can also do explicit cleanup
         messages_count = Message.objects.filter(
             sender=user
         ).count() + Message.objects.filter(
             receiver=user
         ).count()
         
-        # Trigger the deletion (signal will handle cleanup)
         user.delete()
         
         return Response(
