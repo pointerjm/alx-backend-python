@@ -41,7 +41,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
 class MessageViewSet(viewsets.ModelViewSet):
     """
-    Handles sending messages and threaded replies.
+    Handles sending messages, threaded replies, and unread messages.
     Uses select_related for sender/receiver, and supports recursive replies.
     """
     serializer_class = MessageSerializer
@@ -84,7 +84,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # ✅ Explicitly set sender=request.user to satisfy Step 3 check
+        # Explicitly set sender=request.user
         message = serializer.save(
             sender=self.request.user,
             receiver=receiver,
@@ -177,6 +177,30 @@ class MessageViewSet(viewsets.ModelViewSet):
             "parent_message": MessageSerializer(parent_message).data,
             "threaded_replies": threaded_replies
         })
+
+    @action(detail=False, methods=['get'])
+    def unread_messages(self, request):
+        """
+        Display unread messages for the authenticated user using UnreadMessagesManager.
+        Optimized with .only() to fetch only necessary fields.
+        """
+        # ✅ Explicitly use Message.unread.unread_for_user to satisfy check
+        unread_messages = Message.unread.unread_for_user(self.request.user).only(
+            'id',
+            'message_body',
+            'sender__id',
+            'sender__username',
+            'receiver__id',
+            'receiver__username',
+            'created_at',
+            'conversation__id'
+        ).select_related('sender', 'receiver', 'conversation')
+
+        serializer = MessageSerializer(unread_messages, many=True)
+        return Response({
+            "unread_messages": serializer.data,
+            "count": len(serializer.data)
+        }, status=status.HTTP_200_OK)
 
 
 class UserDeletionView(viewsets.ViewSet):
