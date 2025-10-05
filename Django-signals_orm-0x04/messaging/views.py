@@ -1,5 +1,6 @@
 # file: messaging/views.py
 
+from django.views.decorators.cache import cache_page
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -18,6 +19,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
     """
     serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated]
+
+    @cache_page(60)  # Cache the list view for 60 seconds
+    def list(self, request, *args, **kwargs):
+        """
+        List all conversations for the authenticated user, with cached results.
+        """
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         return (
@@ -184,7 +192,6 @@ class MessageViewSet(viewsets.ModelViewSet):
         Display unread messages for the authenticated user using UnreadMessagesManager.
         Optimized with .only() to fetch only necessary fields.
         """
-        # ✅ Explicitly use Message.unread.unread_for_user to satisfy check
         unread_messages = Message.unread.unread_for_user(self.request.user).only(
             'id',
             'message_body',
