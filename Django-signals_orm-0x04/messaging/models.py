@@ -5,6 +5,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.db.models.signals import pre_save, post_delete
 from django.dispatch import receiver
+from .managers import UnreadMessagesManager
 
 
 class Conversation(models.Model):
@@ -45,7 +46,7 @@ class MessageHistory(models.Model):
 
 class Message(models.Model):
     """
-    Message model with edit tracking and threaded conversation support.
+    Message model with edit tracking, threaded conversation support, and unread tracking.
     """
     conversation = models.ForeignKey(
         Conversation, related_name="messages", on_delete=models.CASCADE
@@ -87,6 +88,13 @@ class Message(models.Model):
         on_delete=models.CASCADE,
     )
 
+    # ✅ Unread tracking - BOOLEAN FIELD for tracking if message is read
+    read = models.BooleanField(default=False)
+
+    # ✅ Custom manager for unread messages
+    objects = models.Manager()  # Default manager
+    unread = UnreadMessagesManager()  # Custom manager for unread messages
+
     def mark_as_edited(self, user):
         """Helper method to update edit fields when a message is modified."""
         self.is_edited = True
@@ -98,7 +106,7 @@ class Message(models.Model):
         return f"Message {self.id} in Conversation {self.conversation.id}"
 
 
-# ✅ Signal for logging message edits (Step 1)
+# ✅ Signal for logging message edits
 @receiver(pre_save, sender=Message)
 def log_message_edit(sender, instance, **kwargs):
     """
@@ -119,7 +127,7 @@ def log_message_edit(sender, instance, **kwargs):
             pass
 
 
-# ✅ Signal for deleting user-related data (Step 2)
+# ✅ Signal for deleting user-related data
 @receiver(post_delete, sender=settings.AUTH_USER_MODEL)
 def cleanup_user_data(sender, instance, **kwargs):
     """
