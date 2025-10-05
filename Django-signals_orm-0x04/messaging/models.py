@@ -3,12 +3,13 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-from django.db.models.signals import pre_save, post_delete
-from django.dispatch import receiver
 from .managers import UnreadMessagesManager
 
 
 class Conversation(models.Model):
+    """
+    Represents a conversation between multiple participants.
+    """
     participants = models.ManyToManyField(
         settings.AUTH_USER_MODEL, related_name="conversations"
     )
@@ -46,7 +47,8 @@ class MessageHistory(models.Model):
 
 class Message(models.Model):
     """
-    Message model with edit tracking, threaded conversation support, and unread tracking.
+    Message model with fields for sender, receiver, content, timestamp, edit tracking,
+    threaded conversations, and unread tracking.
     """
     conversation = models.ForeignKey(
         Conversation, related_name="messages", on_delete=models.CASCADE
@@ -63,13 +65,13 @@ class Message(models.Model):
         null=True,
         blank=True
     )
-    message_body = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    message_body = models.TextField()  # Content field (Step 0)
+    created_at = models.DateTimeField(auto_now_add=True)  # Timestamp field (Step 0)
     
-    # ✅ Edit tracking - BOOLEAN FIELD for tracking if edited
+    # Edit tracking - BOOLEAN FIELD for tracking if edited (Step 1)
     is_edited = models.BooleanField(default=False)
     
-    # ✅ Edit tracking
+    # Edit tracking fields (Step 1)
     edited_at = models.DateTimeField(null=True, blank=True)
     edited_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -79,7 +81,7 @@ class Message(models.Model):
         related_name="edited_messages",
     )
 
-    # ✅ Threaded conversations: self-referential FK
+    # Threaded conversations: self-referential FK (Step 3)
     parent_message = models.ForeignKey(
         "self",
         null=True,
@@ -88,12 +90,12 @@ class Message(models.Model):
         on_delete=models.CASCADE,
     )
 
-    # ✅ Unread tracking - BOOLEAN FIELD for tracking if message is read
+    # Unread tracking - BOOLEAN FIELD for tracking if message is read (Step 4)
     read = models.BooleanField(default=False)
 
-    # ✅ Custom manager for unread messages
+    # Managers
     objects = models.Manager()  # Default manager
-    unread = UnreadMessagesManager()  # Custom manager for unread messages
+    unread = UnreadMessagesManager()  # Custom manager for unread messages (Step 4)
 
     def mark_as_edited(self, user):
         """Helper method to update edit fields when a message is modified."""
@@ -106,41 +108,25 @@ class Message(models.Model):
         return f"Message {self.id} in Conversation {self.conversation.id}"
 
 
-# ✅ Signal for logging message edits
-@receiver(pre_save, sender=Message)
-def log_message_edit(sender, instance, **kwargs):
+class Notification(models.Model):
     """
-    Log old content to MessageHistory before saving an edited message.
+    Stores notifications for users, linked to a message and user.
     """
-    if instance.pk:  # Existing message
-        try:
-            old_message = sender.objects.get(pk=instance.pk)
-            # Check if this is an edit (message_body changed)
-            if old_message.message_body != instance.message_body:
-                # Create history record
-                MessageHistory.objects.create(
-                    original_message=instance,
-                    old_content=old_message.message_body,
-                    edited_by=old_message.edited_by or old_message.sender
-                )
-        except sender.DoesNotExist:
-            pass
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="notifications",
+        on_delete=models.CASCADE
+    )
+    message = models.ForeignKey(
+        'Message',
+        related_name="notifications",
+        on_delete=models.CASCADE
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    read = models.BooleanField(default=False)
 
+    class Meta:
+        ordering = ['-created_at']
 
-# ✅ Signal for deleting user-related data
-@receiver(post_delete, sender=settings.AUTH_USER_MODEL)
-def cleanup_user_data(sender, instance, **kwargs):
-    """
-    Clean up all messages, notifications, and message histories when user is deleted.
-    """
-    # Delete all messages sent/received by the user
-    Message.objects.filter(sender=instance).delete()
-    Message.objects.filter(receiver=instance).delete()
-    
-    # Delete all message history related to the user
-    MessageHistory.objects.filter(
-        edited_by=instance
-    ).delete()
-    
-    # Delete conversation participation
-    instance.conversations.clear()
+    def __str__(self):
+        return f"Notification for User {self.user.id} on Message {self.message.id}"
