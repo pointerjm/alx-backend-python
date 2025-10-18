@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-messaging-green
+  labels:
+    app: django-messaging
+    version: green
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: django-messaging
+      version: green
+  template:
+    metadata:
+      labels:
+        app: django-messaging
+        version: green
+    spec:
+      containers:
+      - name: django-app
+        image: yourusername/messaging-app:v2.0
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-messaging-green-service
+spec:
+  selector:
+    app: django-messaging
+    version: green
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP

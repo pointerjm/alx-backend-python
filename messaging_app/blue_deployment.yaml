@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-messaging-blue
+  labels:
+    app: django-messaging
+    version: blue
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: django-messaging
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: django-messaging
+        version: blue
+    spec:
+      containers:
+      - name: django-app
+        image: yourusername/messaging-app:2.0  # Updated to version 2.0
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-messaging-blue-service
+spec:
+  selector:
+    app: django-messaging
+    version: blue
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP

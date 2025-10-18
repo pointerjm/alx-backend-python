@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# kubctl-0x01 - Scale Django app and perform load testing
+
+set -e
+
+echo "🔄 Scaling Django Messaging App..."
+
+# Scale deployment to 3 replicas
+kubectl scale deployment django-messaging-app --replicas=3
+echo "✅ Scaled to 3 replicas"
+
+# Verify multiple pods are running
+echo "📋 Checking pods:"
+kubectl get pods -l app=django-messaging
+echo ""
+
+# Install wrk if not available
+if ! command -v wrk &> /dev/null; then
+    echo "Installing wrk..."
+    sudo apt-get update && sudo apt-get install -y wrk
+fi
+
+# Get minikube IP and port-forward
+MINIKUBE_IP=$(minikube ip)
+echo "🌐 Minikube IP: $MINIKUBE_IP"
+
+# Port forward to service
+echo "🔌 Setting up port forwarding..."
+kubectl port-forward service/django-messaging-service 8080:80 &
+PORT_FORWARD_PID=$!
+
+sleep 5
+
+# Perform load testing
+echo "⚡ Running load test with wrk..."
+wrk -t12 -c400 -d30s http://localhost:8080/
+echo ""
+
+# Monitor resource usage
+echo "📊 Monitoring resource usage..."
+kubectl top pods -l app=django-messaging
+echo ""
+
+# Cleanup port forward
+kill $PORT_FORWARD_PID 2>/dev/null || true
+echo "🎉 Load testing completed!"
+
+echo "✅ Scaling and testing successful!"

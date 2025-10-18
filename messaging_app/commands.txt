@@ -1,0 +1,11 @@
+# Install Nginx Ingress Controller
+minikube addons enable ingress
+
+# Apply Ingress configuration
+kubectl apply -f ingress.yaml
+
+# Verify Ingress
+kubectl get ingress
+
+# Get Minikube IP for testing
+minikube ip

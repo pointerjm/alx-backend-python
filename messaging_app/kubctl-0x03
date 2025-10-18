@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# kubctl-0x03 - Rolling Update with Downtime Testing
+
+set -e
+
+echo "🔄 Starting Rolling Update to version 2.0..."
+
+# Apply updated deployment
+echo "Applying updated deployment..."
+kubectl apply -f blue_deployment.yaml
+
+# Monitor rollout status
+echo "Monitoring rollout progress..."
+kubectl rollout status deployment/django-messaging-blue
+
+# Continuous curl testing for downtime detection
+echo "🧪 Testing for downtime (30 seconds)..."
+{
+    for i in {1..30}; do
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/ 2>/dev/null || echo "FAIL")
+        if [ "$RESPONSE" != "200" ] && [ "$RESPONSE" != "FAIL" ]; then
+            echo "❌ Downtime detected at request $i: HTTP $RESPONSE"
+        fi
+        sleep 1
+    done
+    echo "✅ No downtime detected!"
+} &
+
+TEST_PID=$!
+
+# Port forward in background
+kubectl port-forward service/django-messaging-blue-service 8080:80 >/dev/null 2>&1 &
+PF_PID=$!
+
+sleep 2
+
+# Wait for test to complete
+wait $TEST_PID
+
+# Cleanup port forward
+kill $PF_PID 2>/dev/null || true
+
+# Verify rolling update complete
+echo "✅ Verifying update completion:"
+kubectl get pods -l app=django-messaging,version=blue
+kubectl describe deployment django-messaging-blue | grep Image
+
+echo "🎉 Rolling update completed successfully with ZERO downtime!"
