@@ -6,7 +6,12 @@ metadata:
     app: django-messaging
     version: blue
 spec:
-  replicas: 1
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app: django-messaging
@@ -19,9 +24,16 @@ spec:
     spec:
       containers:
       - name: django-app
-        image: yourusername/messaging-app:latest
+        image: yourusername/messaging-app:2.0  # Updated to version 2.0
         ports:
         - containerPort: 8000
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
