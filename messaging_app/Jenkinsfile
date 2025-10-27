@@ -3,10 +3,10 @@ pipeline {
 
     environment {
         VENV_DIR = "venv"
+        PROJECT_DIR = "messaging_app"
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 git(
@@ -24,26 +24,59 @@ pipeline {
                     ${VENV_DIR}/bin/pip install --upgrade pip
                     
                     # Install project dependencies
-                    ${VENV_DIR}/bin/pip install -r messaging_app/requirements.txt
+                    ${VENV_DIR}/bin/pip install -r ${PROJECT_DIR}/requirements.txt
                     
-                    # Install testing tools
-                    ${VENV_DIR}/bin/pip install pytest
+                    # Install testing and linting tools
+                    ${VENV_DIR}/bin/pip install pytest flake8 pytest-cov
+                '''
+            }
+        }
+
+        stage('Lint Code') {
+            steps {
+                sh '''
+                    echo "Running flake8 lint checks..."
+                    ${VENV_DIR}/bin/flake8 ${PROJECT_DIR} --count --select=E9,F63,F7,F82 --show-source --statistics
+                    ${VENV_DIR}/bin/flake8 ${PROJECT_DIR} --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
                 '''
             }
         }
 
         stage('Run Tests') {
             steps {
-                sh '''
-                    # Run tests using pytest inside the virtualenv
-                    ${VENV_DIR}/bin/pytest messaging_app/tests --junitxml=report.xml
-                '''
+                script {
+                    // Only run tests if test folder exists
+                    if (fileExists("${PROJECT_DIR}/tests")) {
+                        sh """
+                            echo "Running pytest with coverage..."
+                            ${VENV_DIR}/bin/pytest ${PROJECT_DIR}/tests \
+                                --cov=${PROJECT_DIR} \
+                                --cov-report=xml \
+                                --junitxml=report.xml
+                        """
+                    } else {
+                        echo "⚠️ No tests directory found at ${PROJECT_DIR}/tests. Skipping pytest."
+                    }
+                }
             }
             post {
                 always {
-                    // Publish JUnit test results even if tests fail
+                    // Publish JUnit test results even if tests fail or folder missing
                     junit allowEmptyResults: true, testResults: 'report.xml'
                 }
+            }
+        }
+
+        // Optional: Future Docker build stage (for task 1)
+        stage('Build Docker Image') {
+            when {
+                expression { fileExists("${PROJECT_DIR}/Dockerfile") }
+            }
+            steps {
+                sh '''
+                    echo "Building Docker image for messaging_app..."
+                    docker build -t messaging_app:latest ${PROJECT_DIR}
+                '''
             }
         }
     }

@@ -1,0 +1,84 @@
+name: CI - Django Messaging App Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Django Tests
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_db
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DJANGO_SETTINGS_MODULE: messaging_app.settings
+      DATABASE_URL: mysql://test_user:test_pass@127.0.0.1:3306/test_db
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          . venv/bin/activate
+          pip install --upgrade pip
+          pip install -r messaging_app/requirements.txt
+          pip install pytest pytest-django pytest-cov flake8 dj-database-url
+
+      - name: Wait for MySQL to be ready
+        run: |
+          until mysqladmin ping -h 127.0.0.1 --silent; do
+            echo "Waiting for database connection..."
+            sleep 5
+          done
+
+      - name: Run Linting (flake8)
+        run: |
+          . venv/bin/activate
+          flake8 messaging_app --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 messaging_app --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+
+      - name: Run Tests with Coverage
+        run: |
+          . venv/bin/activate
+          pytest messaging_app/tests \
+            --ds=messaging_app.settings \
+            --cov=messaging_app \
+            --cov-report=xml \
+            --junitxml=report.xml
+
+      - name: Upload Test Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: report.xml
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
