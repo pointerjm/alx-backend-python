@@ -4,6 +4,7 @@ pipeline {
     environment {
         VENV_DIR = "venv"
         PROJECT_DIR = "messaging_app"
+        TEST_DIR = "messaging_app/messaging_app/.github"
     }
 
     stages {
@@ -46,16 +47,16 @@ pipeline {
             steps {
                 script {
                     // Only run tests if test folder exists
-                    if (fileExists("${PROJECT_DIR}/tests")) {
+                    if (fileExists("${TEST_DIR}")) {
                         sh """
                             echo "Running pytest with coverage..."
-                            ${VENV_DIR}/bin/pytest ${PROJECT_DIR}/tests \
+                            ${VENV_DIR}/bin/pytest ${TEST_DIR} \
                                 --cov=${PROJECT_DIR} \
                                 --cov-report=xml \
                                 --junitxml=report.xml
                         """
                     } else {
-                        echo "⚠️ No tests directory found at ${PROJECT_DIR}/tests. Skipping pytest."
+                        echo "⚠️ No tests directory found at ${TEST_DIR}. Skipping pytest."
                     }
                 }
             }
