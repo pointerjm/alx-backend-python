@@ -1,0 +1,39 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git(
+                    url: 'https://github.com/pointerjm/alx-backend-python.git',
+                    branch: 'main'
+                )
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install --upgrade pip
+                    pip install -r messaging_app/requirements.txt
+                '''
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh '''
+                    . venv/bin/activate
+                    pytest messaging_app/tests --junitxml=report.xml
+                '''
+            }
+            post {
+                always {
+                    junit 'report.xml'
+                }
+            }
+        }
+    }
+}
